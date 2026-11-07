@@ -1,27 +1,51 @@
 name: Build APK
+
 on:
   push:
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Unzip project
-        run: unzip -q FpsBoost.zip
+        run: |
+          mkdir work
+          unzip -q FpsBoost.zip -d work
+          DIR=$(dirname "$(find work -name settings.gradle.kts | head -1)")
+          echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - uses: android-actions/setup-android@v3
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
-          build-root-directory: FpsBoost
-      - name: Build
-        working-directory: FpsBoost
-        run: gradle assembleDebug
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" FpsHelper.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: FpsBoost/app/build/outputs/apk/debug/app-debug.apk
+          name: FpsHelper-apk
+          path: FpsHelper.apk
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" FpsHelper.apk \
+            --title "FPS Helper v1.0.${{ github.run_number }}" --generate-notes
